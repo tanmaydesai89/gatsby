@@ -17,7 +17,7 @@ export interface IMutationAction {
 }
 export interface IBuildContext {
   program?: IProgram
-  store: Store<IGatsbyState, AnyAction>
+  store?: Store<IGatsbyState, AnyAction>
   parentSpan?: Span
   gatsbyNodeGraphQLFunction?: Runner
   graphqlRunner?: GraphQLRunner

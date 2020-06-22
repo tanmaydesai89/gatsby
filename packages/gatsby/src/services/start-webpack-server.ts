@@ -32,7 +32,7 @@ export async function startWebpackServer({
   compiler: Compiler
   websocketManager: WebsocketManager
 }> {
-  if (!program || !app) {
+  if (!program || !app || !store) {
     throw new Error(`Missing required params`)
   }
   let { compiler, webpackActivity, websocketManager } = await startServer(
