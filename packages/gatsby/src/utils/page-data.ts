@@ -14,7 +14,7 @@ interface IPageData {
   staticQueryHashes: string[]
 }
 
-interface IPageDataWithQueryResult extends IPageData {
+export interface IPageDataWithQueryResult extends IPageData {
   result: IExecutionResult
 }
 
@@ -143,20 +143,18 @@ export async function flush(): Promise<void> {
       const staticQueryHashes =
         staticQueriesByTemplate.get(page.componentPath)?.map(String) || []
 
-      const body = await writePageData(path.join(program.directory, `public`), {
-        ...page,
-        staticQueryHashes,
-      })
+      const result = await writePageData(
+        path.join(program.directory, `public`),
+        {
+          ...page,
+          staticQueryHashes,
+        }
+      )
 
       if (program?._?.[0] === `develop`) {
         websocketManager.emitPageData({
-          ...body.result,
           id: pagePath,
-          result: {
-            data: body.result.data,
-            pageContext: body.result.pageContext,
-            staticQueryHashes: body.staticQueryHashes,
-          },
+          result,
         })
       }
     }
