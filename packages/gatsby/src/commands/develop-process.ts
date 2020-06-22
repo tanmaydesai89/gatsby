@@ -719,9 +719,9 @@ module.exports = async (program: IProgram): Promise<void> => {
       )
 
       enqueueFlush()
-      markWebpackStatusAsDone()
     }
 
+    markWebpackStatusAsDone()
     done()
   })
 }
