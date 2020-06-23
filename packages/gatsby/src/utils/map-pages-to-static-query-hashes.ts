@@ -12,26 +12,66 @@ const mapComponentsToStaticQueryHashes = (
     new Map()
   )
 
+/* This function takes the current Redux state and a compilation
+ * object from webpack and returns a map of unique templates
+ * to static queries included in each (as hashes).
+ *
+ * This isn't super straightforward because templates may include
+ * deep component trees with static queries present at any depth.
+ * This is why it is necessary to map templates to all their (user land and node_modules)
+ * dependencies first and then map those dependencies to known static queries.
+ *
+ * Also, Gatsby makes it possible to wrap an entire site or page with a layout
+ * or other component(s) via the wrapRootElement and wrapPageElement APIs. These must
+ * also be handled when computing static queries for a page.
+ *
+ * Let's go through the implementation step by step.
+ */
 export function mapTemplatesToStaticQueryHashes(
   reduxState: IGatsbyState,
   compilation
 ): Map<string, Array<number>> {
+  /* The `staticQueryComponents` slice of state is useful because
+   * it is a pre extracted collection of all static queries found in a Gatsby site.
+   * This lets us traverse upwards from those to templates that
+   * may contain components that contain them.
+   * Note that this upward traversal is much shallower (and hence more performant)
+   * than an equivalent downward one from an entry point.
+   */
   const { components, staticQueryComponents } = reduxState
   const { modules } = compilation
 
+  /* When we traverse upwards, we need to know where to stop. We'll call these terminal nodes.
+   * `async-requires.js` is the entry point for every page, while `api-runner-browser-plugins.js`
+   * is the one for `gatsby-browser` (where one would use wrapRootElement or wrapPageElement APIs)
+   */
   const terminalNodes = [
     `.cache/api-runner-browser-plugins.js`,
     `.cache/async-requires.js`,
   ]
 
+  /* We call the queries included above a page (via wrapRootElement or wrapPageElement APIs)
+   * global queries. For now, we include these in every single page for simplicity. Overhead
+   * here is not much since we are storing hashes (that reference separate result files)
+   * as opposed to inlining results. We may move these to app-data perhaps in the future.
+   */
   const globalStaticQueries = new Set<string>()
 
+  /* This function takes a webpack module corresponding
+   * to the file containing a static query and returns
+   * a Set of strings, each an absolute path of a dependent
+   * of this module
+   */
   const getDeps = (mod): any => {
     const staticQueryModuleComponentPath = mod.resource
     const result = new Set()
 
+    // This is the body of the recursively called function
     const getDepsFn = (m): any => {
+      // Reasons in webpack are literally reasons of why this module was included in the tree
       const hasReasons = m.hasReasons()
+
+      // Is this node one of our known terminal nodes? See explanation above
       const isTerminalNode = terminalNodes.reduce(
         (result, terminalNode) => result || m?.resource?.includes(terminalNode),
         false
@@ -42,6 +82,8 @@ export function mapTemplatesToStaticQueryHashes(
         return result
       }
 
+      // These are non terminal dependents and hence modules that need
+      // further upward traversal
       const nonTerminalDependents = m.reasons
         .filter(r => {
           const dependentModule = r.module
@@ -76,6 +118,7 @@ export function mapTemplatesToStaticQueryHashes(
 
   const mapOfStaticQueryComponentsToDependants = new Map()
 
+  // For every known static query, we get its dependents.
   staticQueryComponents.forEach(({ componentPath }) => {
     const staticQueryComponentModule = modules.find(
       m => m.resource === componentPath
@@ -99,6 +142,7 @@ export function mapTemplatesToStaticQueryHashes(
     if (hash) globalStaticQueryHashes.push(hash)
   })
 
+  // For every known page, we get queries
   const mapOfTemplatesToStaticQueryHashes = Array.from(components).reduce(
     (map, [page]) => {
       const staticQueryHashes = [...globalStaticQueryHashes]
